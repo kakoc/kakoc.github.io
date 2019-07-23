@@ -1,0 +1,22 @@
+# The URL the site will be built for
+title = "Konstantin Matsiushonak: a journey into programming"
+base_url = "https://kakoc.blog"
+description = "Konstantin Matsiushonak's blog"
+
+generate_feed = true
+feed_filename = "rss.xml"
+
+highlight_code = true
+compile_sass = true
+highlight_theme = "cheerfully-light"
+
+# Whether to build a search index to be used later on by a JavaScript library
+build_search_index = true
+
+[extra]
+author = "Konstantin Matsiushonak"
+
+[link_checker]
+skip_anchor_prefixes = [
+    "https://github.com/",
+]
