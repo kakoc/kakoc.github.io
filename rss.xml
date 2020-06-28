@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>Konstantin Matsiushonak: a journey into programming</title>
+        <link>https://kakoc.blog</link>
+        <description>Konstantin Matsiushonak&#x27;s blog</description>
+        <generator>Zola</generator>
+        <language>en</language>
+        <atom:link href="https://kakoc.blog/rss.xml" rel="self" type="application/rss+xml"/>
+        <lastBuildDate>Sun, 28 Jun 2020 00:00:00 +0000</lastBuildDate>
+        <item>
+            <title>Hello, blog!</title>
+            <pubDate>Sun, 28 Jun 2020 00:00:00 +0000</pubDate>
+            <link>https://kakoc.blog/blog/hello-blog/</link>
+            <guid>https://kakoc.blog/blog/hello-blog/</guid>
+            <description>&lt;pre style=&quot;background-color:#f5f5f5;&quot;&gt;
+&lt;code&gt;&lt;span style=&quot;color:#1f1f1f;&quot;&gt;
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#668f14;&quot;&gt;fn &lt;&#x2F;span&gt;&lt;span style=&quot;color:#c23f31;&quot;&gt;main&lt;&#x2F;span&gt;&lt;span style=&quot;color:#1f1f1f;&quot;&gt;() {
+  &lt;&#x2F;span&gt;&lt;span style=&quot;color:#a2a001;&quot;&gt;println!&lt;&#x2F;span&gt;&lt;span style=&quot;color:#1f1f1f;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#d07711;&quot;&gt;&amp;quot;hello, blog&amp;quot;&lt;&#x2F;span&gt;&lt;span style=&quot;color:#1f1f1f;&quot;&gt;);
+}
+
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;</description>
+        </item>
+    </channel>
+</rss>
