@@ -47,7 +47,7 @@
     }
   }
 
-  h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table, pre, p {
+  h1, h2, h3, h4, h5, h6, blockquote, ul, ol, table, pre {
     max-width: $container-width;
     margin-left: auto;
     margin-right: auto;
@@ -82,6 +82,18 @@
       border: 1px solid #ccc;
       padding: 0.5rem;
     }
+  }
+
+  h1, h2, p {
+      max-width: 850px;
+      margin-left: auto;
+      margin-right: auto;
+  }
+
+  img {
+      margin-left: auto;
+      margin-right: auto;
+      display: flex;
   }
 }
 
