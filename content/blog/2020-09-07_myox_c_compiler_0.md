@@ -13,3 +13,29 @@ From the learning point of view I think that after understanding how to write th
 ## How
 
 This series will be splitted into articles. Every article is a self sufficient chunk. The next article will modify the previous one + append something new.
+
+## Base
+
+Now lets create a project with a base structure. As I said earlier we will develope incrementally. Every new chapter it's a new verison of our compiler. We can do that with our version control system. But I prefer to have previous versions explicitely because it's easier to analyze with previous/next versions, make changes. From the Rust perspective I'm going to use [workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) for that.
+
+
+```bash
+cargo new c_compiler
+cd c_compiler
+rm -r src
+```
+
+Since we are going to use workspaces lets go to the `Cargo.toml`, remove all its contets and append:
+
+```toml
+[workspace]
+members = [
+  "<here we will place a name of the workspace>",
+]
+```
+
+Next versions of our compilers will be created via: 
+
+```bash
+cargo new <name>
+```
