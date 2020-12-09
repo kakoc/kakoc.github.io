@@ -3,6 +3,8 @@ title = "MYOX: Youtube downloader"
 description = "Lets implement Youtube downloader"
 +++
 
+[MYOX: what does it mean?](@/blog/2020-06-29_myox.md)
+
 ## Preface
 
 While walking, training, going to work I like to listen to various talks, podcasts, etc. Recently I decided to save a couple of them on my phone. I found some web apps which allowed me to do that. But there were some many ads, it was so unpleasant to deal with them. This is why started to looking for a way how I can do that on my own, without intermediate services. And as you will see in a few minutes it's easy to do.  
