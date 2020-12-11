@@ -3,7 +3,7 @@ title = "MYOX: Youtube downloader"
 description = "Lets implement Youtube downloader"
 +++
 
-[MYOX: what does it mean?](@/blog/2020-06-29_myox.md)
+[MYOX: what does it mean?](@/blog/2021-12-20_myox.md)
 
 ## Preface
 
