@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en-gb">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="apple-mobile-web-app-capable" content="yes">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="
+    Let&#x27;s create Javascript bundler
+">
+      <meta name="author" content="Konstantin Matsiushonak">
+      <title>Konstantin Matsiushonak: a journey into programming</title>
+      <link rel="stylesheet" href="https:&#x2F;&#x2F;kakoc.blog&#x2F;site.css" />
+      <link rel="shortcut icon" type="image/png" href="https:&#x2F;&#x2F;kakoc.blog&#x2F;favicon.ico"/>
+      <link href="https:&#x2F;&#x2F;kakoc.blog&#x2F;rss.xml" rel="feed" type="application/rss+xml" title="Konstantin Matsiushonak: a journey into programming" />
+        <!-- <script> -->
+        <!--   (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){ -->
+        <!--   (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o), -->
+        <!--   m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m) -->
+        <!--   })(window,document,'script','https://www.google-analytics.com/analytics.js','ga'); -->
+
+        <!--   ga('create', 'UA-43335571-2', 'auto'); -->
+        <!--   ga('send', 'pageview'); -->
+        <!-- </script> -->
+    </head>
+
+    <header id="header">
+        <h1 class="logo"><a href="/">kakoc_blog</a></h1>
+        <ul>
+            <li><a href="/blog/">Blog</a></li>
+        </ul>
+    </header>
+
+    <div id="content">
+        
+    <div class="post">
+        <div class="post__title">
+            <h1>MYOX: Javascript bundler</h1>
+            <div class="post__meta">
+                2020-12-01
+                
+            </div>
+            <hr />
+        </div>
+
+        <div class="post__body">
+            <p><a href="https://kakoc.blog/blog/myox/">MYOX: what does it mean?</a></p>
+<h2 id="preface">Preface<a class="zola-anchor" href="#preface" aria-label="Anchor link for: preface">🔗</a></h2>
+<p>Have you heard/used Webpack, Babel? Wanted to understand the basic ideas behind them?</p>
+<p>In this blog post I'm going to create Javascript bundler and demonstrate how things like Babel can be leveraged there. But we won't use Babel.
+In Rust ecosystem we have our own Babel which is called <a href="https://github.com/swc-project/swc">swc</a>.</p>
+<h2 id="final-goal">Final goal<a class="zola-anchor" href="#final-goal" aria-label="Anchor link for: final-goal">🔗</a></h2>
+<p>Firstly let's determine our final goal.<br />
+Our goal is to write Javascript bundler which can bundle basic <strong>React hello world</strong> application:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">// index.js
+</span><span style="color:#72ab00;">import </span><span style="color:#b3933a;">* </span><span style="color:#72ab00;">as </span><span style="color:#5597d6;">React </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&#39;react&#39;</span><span style="color:#1f1f1f;">;
+</span><span style="color:#72ab00;">import </span><span style="color:#b3933a;">* </span><span style="color:#72ab00;">as </span><span style="color:#5597d6;">ReactDOM </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&#39;react-dom&#39;</span><span style="color:#1f1f1f;">;
+
+</span><span style="color:#668f14;">class </span><span style="color:#c23f31;">Hello </span><span style="color:#668f14;">extends </span><span style="color:#a2a001;">React</span><span style="color:#1f1f1f;">.</span><span style="font-style:italic;color:#b06936;">Component </span><span style="color:#1f1f1f;">{
+  </span><span style="color:#c23f31;">render</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#72ab00;">return </span><span style="color:#a2a001;">React</span><span style="color:#1f1f1f;">.</span><span style="color:#5597d6;">createElement</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&#39;div&#39;</span><span style="color:#1f1f1f;">, </span><span style="color:#b3933a;">null</span><span style="color:#1f1f1f;">, </span><span style="color:#d07711;">`Hello </span><span style="color:#1f1f1f;">${</span><span style="color:#5597d6;">this</span><span style="color:#1f1f1f;">.props.toWhat}</span><span style="color:#d07711;">`</span><span style="color:#1f1f1f;">);
+  }
+}
+
+</span><span style="color:#a2a001;">ReactDOM</span><span style="color:#1f1f1f;">.</span><span style="color:#5597d6;">render</span><span style="color:#1f1f1f;">(
+  </span><span style="color:#a2a001;">React</span><span style="color:#1f1f1f;">.</span><span style="color:#5597d6;">createElement</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">Hello</span><span style="color:#1f1f1f;">, {toWhat: </span><span style="color:#d07711;">&#39;World&#39;</span><span style="color:#1f1f1f;">}, </span><span style="color:#b3933a;">null</span><span style="color:#1f1f1f;">),
+  </span><span style="color:#a2a001;">document</span><span style="color:#1f1f1f;">.</span><span style="color:#5597d6;">getElementById</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&#39;root&#39;</span><span style="color:#1f1f1f;">)
+);
+</span></code></pre>
+<p>The bundle process should be like:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#5597d6;">cargo</span><span style="color:#1f1f1f;"> run </span><span style="color:#72ab00;">&lt;</span><span style="color:#1f1f1f;">path_to_entry.js_file</span><span style="color:#72ab00;">&gt; </span><span style="color:#7f8989;">## it will produce out.js file
+</span></code></pre>
+<p>Produced <strong>out.js</strong> we will include in <strong>index.html</strong>:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#6486ab;">&lt;body&gt;
+    &lt;div id=</span><span style="color:#d07711;">&quot;root&quot;</span><span style="color:#6486ab;">&gt;&lt;/div&gt;
+    &lt;script src=</span><span style="color:#d07711;">&quot;./out.js&quot;</span><span style="color:#6486ab;">&gt;&lt;/script&gt;
+&lt;/body&gt;
+</span></code></pre>
+<p>And open that file in a browser.</p>
+<h2 id="roadmap">Roadmap<a class="zola-anchor" href="#roadmap" aria-label="Anchor link for: roadmap">🔗</a></h2>
+<p>In order to achieve the final goal our journey will be splitted into several steps:</p>
+<ul>
+<li>getting familiar with <a href="https://github.com/swc-project/swc">swc</a></li>
+<li>implement Javascript bundler which can bundle our local Javascript files without any external <strong>node_modules</strong> used</li>
+<li>add an ability to import <strong>external</strong> packages from <strong>node_modules</strong> folder and bundle all that stuff together</li>
+</ul>
+<h2 id="initial-setup">Initial setup<a class="zola-anchor" href="#initial-setup" aria-label="Anchor link for: initial-setup">🔗</a></h2>
+<p>Since we are going to run our application as the end user our application will be a binary:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#5597d6;">cargo</span><span style="color:#1f1f1f;"> new</span><span style="color:#5597d6;"> --bin</span><span style="color:#1f1f1f;"> js-bundler
+</span></code></pre>
+<p>Now let's add needed dependencies(<a href="https://github.com/killercup/cargo-edit">cargo add</a> is used here):</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;"># flexible Results/Errors
+</span><span style="color:#5597d6;">cargo</span><span style="color:#1f1f1f;"> add anyhow 
+</span><span style="color:#7f8989;"># common swc entities
+</span><span style="color:#1f1f1f;">cargo add swc_common 
+</span><span style="color:#7f8989;"># parsed javascript nodes types
+</span><span style="color:#1f1f1f;">carg add swc_ecma_ast 
+</span><span style="color:#7f8989;"># transform esmodules to commonjs
+</span><span style="color:#1f1f1f;">cargo add swc_ecma_codegen
+</span><span style="color:#5597d6;">cargo</span><span style="color:#1f1f1f;"> add swc_ecma_transforms 
+</span><span style="color:#7f8989;"># traverse ast
+</span><span style="color:#1f1f1f;">cargo add swc_ecma_visit 
+</span><span style="color:#7f8989;"># generate unique identifiers for modules
+</span><span style="color:#1f1f1f;">cargo add uuid</span><span style="color:#5597d6;"> --featuers</span><span style="color:#1f1f1f;"> v4
+
+</span><span style="color:#7f8989;"># store tmp js files for testing
+</span><span style="color:#1f1f1f;">cargo add</span><span style="color:#5597d6;"> -D</span><span style="color:#1f1f1f;"> tempfile 
+</span></code></pre>
+<p>All project I'm going to write in one <strong>src/main.rs</strong> file.</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">// all used modules
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">anyhow::Result;
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::{
+    collections::{HashMap, HashSet},
+    env, fs, io,
+    io::{ErrorKind, Write},
+    path::PathBuf,
+    rc::Rc,
+    sync::Mutex,
+};
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">swc_common::{sync::Lrc, Globals, Mark, SourceFile, SourceMap, </span><span style="color:#b3933a;">GLOBALS</span><span style="color:#1f1f1f;">};
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">swc_ecma_ast::{
+    AssignExpr, CallExpr, Expr, ExprOrSpread, ExprOrSuper, ExprStmt, Ident, Lit, Module,
+    ModuleDecl, ModuleItem, Stmt, Str,
+};
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">swc_ecma_codegen::{text_writer::JsWriter, Emitter};
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">swc_ecma_parser::{lexer::Lexer, JscTarget, Parser, StringInput, Syntax};
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">swc_ecma_transforms::modules::common_js::common_js;
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">swc_ecma_visit::{noop_visit_type, Fold, Node, Visit, VisitWith};
+</span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">uuid::Uuid;
+</span></code></pre><h2 id="implementation">Implementation<a class="zola-anchor" href="#implementation" aria-label="Anchor link for: implementation">🔗</a></h2>
+<p>Before coding let's discuss the main idea which will be used to create a bundler.<br />
+While working with Nodejs do you notice that famous <strong>require</strong> function? Basically when we need to import other module we call <strong>require</strong> <strong>function</strong> for that.<br />
+The most important part that it's a function. And how a functions resolution does work? Ask yourself what will we see in the following scenarios:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">// panics in the browser because require is undefined
+// because window.require is undefined
+// i.e. we are trying to find it
+// in the global context
+</span><span style="color:#b39f04;">require</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;./foo.js&quot;</span><span style="color:#1f1f1f;">);
+</span></code></pre><pre style="background-color:#f5f5f5;">
+<code><span style="color:#a2a001;">window</span><span style="color:#1f1f1f;">.require </span><span style="color:#72ab00;">= </span><span style="color:#d07711;">&#39;not important&#39;</span><span style="color:#1f1f1f;">;
+
+</span><span style="color:#668f14;">function </span><span style="color:#c23f31;">bar</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">require</span><span style="color:#1f1f1f;">) {
+  </span><span style="color:#7f8989;">// our window.require
+  // won&#39;t affect us
+  // because require==function arg
+  // will be used
+  </span><span style="color:#668f14;">let </span><span style="color:#5597d6;">foo </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">require</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;./foo.js&quot;</span><span style="color:#1f1f1f;">);
+}
+
+</span><span style="color:#668f14;">const </span><span style="color:#5597d6;">modules </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">{</span><span style="color:#d07711;">&#39;</span><span style="color:#c23f31;">./foo.js</span><span style="color:#d07711;">&#39;</span><span style="color:#1f1f1f;">: (</span><span style="color:#5597d6;">module</span><span style="color:#1f1f1f;">) </span><span style="color:#668f14;">=&gt; </span><span style="color:#1f1f1f;">{</span><span style="color:#7f8989;">/*module src like*/</span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">.</span><span style="color:#da5d42;">exports </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">{a: </span><span style="color:#b3933a;">1</span><span style="color:#1f1f1f;">}}};
+</span><span style="color:#5597d6;">bar</span><span style="color:#1f1f1f;">((</span><span style="color:#5597d6;">path</span><span style="color:#1f1f1f;">) </span><span style="color:#668f14;">=&gt; </span><span style="color:#1f1f1f;">{
+  </span><span style="color:#668f14;">const </span><span style="color:#da5d42;">module </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">{};
+  </span><span style="color:#5597d6;">modules</span><span style="color:#1f1f1f;">[</span><span style="color:#5597d6;">path</span><span style="color:#1f1f1f;">](</span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">);
+  </span><span style="color:#72ab00;">return </span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">.</span><span style="color:#da5d42;">exports</span><span style="color:#1f1f1f;">;
+}
+</span></code></pre>
+<p>So we can &quot;overwrite&quot; <strong>require</strong> and place there src of the required module. We will do that not exactly the same as in the example above and touch that in more detail in the future. Now our purpose is to understand the basic idea which will be used.<br />
+But now is 2020 and I want to write a code with esmodules, not with commonjs.
+In order to solve that problem we need to somehow transform our esmodules based code into commonjs based and only after that bundle the project.
+And here Babel, swc are used. Since we are in Rust ecosystem swc will be used.<br />
+In order to convert esmodule to commonjs module we need to parse file and choose an appropriate strategy into which format we want to convert it.</p>
+<p>Enough talking, it's time to begin writing the code.<br />
+Let's create some test infrastructure. We need to create js files and store them somewhere. For that <strong>tempfile</strong> crate will be used:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">cfg</span><span style="color:#1f1f1f;">(test)]
+</span><span style="color:#668f14;">mod </span><span style="color:#c23f31;">test </span><span style="color:#1f1f1f;">{
+    </span><span style="color:#72ab00;">use super</span><span style="color:#1f1f1f;">::</span><span style="color:#72ab00;">*</span><span style="color:#1f1f1f;">;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::fs::read_to_string;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::fs::File;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::io::Write;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::process::Command;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::thread::sleep;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">std::time::Duration;
+    </span><span style="color:#72ab00;">use </span><span style="color:#1f1f1f;">tempfile::{tempdir, TempDir};
+	
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">create_tmp_file</span><span style="color:#1f1f1f;">() -&gt; (File, PathBuf, TempDir, String) {
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> dir </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">tempdir</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;temdir is created&quot;</span><span style="color:#1f1f1f;">);
+        </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(file, file_path, name) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file_with_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dir);
+
+        (file, file_path, dir, name)
+    }
+
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">create_tmp_file_with_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">dir</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">TempDir) -&gt; (File, PathBuf, String) {
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> name </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;</span><span style="color:#aeb52b;">{}{}</span><span style="color:#d07711;">&quot;</span><span style="color:#1f1f1f;">, Uuid::new_v4().</span><span style="color:#b39f04;">to_hyphenated</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(), </span><span style="color:#d07711;">&quot;.js&quot;</span><span style="color:#1f1f1f;">);
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> file_path </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> dir.</span><span style="color:#b39f04;">path</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">name);
+        </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> file </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">File::create(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+
+        (file, file_path, name)
+    }
+}
+</span></code></pre>
+<p>Now we have all needed in order to think about parsing:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">test</span><span style="color:#1f1f1f;">]
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">successful_parsing</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file, file_path, dir, </span><span style="color:#72ab00;">_</span><span style="color:#1f1f1f;">) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">writeln!</span><span style="color:#1f1f1f;">(file, </span><span style="color:#d07711;">&quot;import </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">foo</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> from &#39;./foo.js&#39;;&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> parsed_module </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">get_parsed_module</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path, </span><span style="color:#72ab00;">&amp;</span><span style="color:#b39f04;">init_source_map</span><span style="color:#1f1f1f;">());
+
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(parsed_module.</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().body.</span><span style="color:#b39f04;">len</span><span style="color:#1f1f1f;">(), </span><span style="color:#b3933a;">1</span><span style="color:#1f1f1f;">);
+}
+</span></code></pre>
+<p>As you can I we want to path file path like <code>index.js</code> and receive a parsed module. By parsed I mean the module which is represented by <a href="https://en.wikipedia.org/wiki/Abstract_syntax_tree">AST</a> - basically just a model of our source code represented by Rust building blocks. For curious people - you can print that AST in a neat form and explore it if you want. We will touch that AST in a few minutes.<br />
+In order to get parsed module firstly we need to receive a lexer - a tool which knows how to split our code into lexemes. I wrote more about that in <a href="https://kakoc.blog/blog/myox-c-compiler-1/">that post</a>. In order to create a lexer we need to pass it our source code. And only after that we can achieve a parser which can parse a file. Do you see that chain?:</p>
+<ul>
+<li>source -&gt; lexer -&gt; parser -&gt; parsed module</li>
+</ul>
+<p>So the shape of our function is something like that:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">get_parsed_module</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">&gt;(</span><span style="color:#5597d6;">file_path</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf, </span><span style="color:#5597d6;">sm</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">Lrc&lt;SourceMap&gt;) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;Module&gt; {
+    </span><span style="color:#7f8989;">// receiving a source file
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> lf </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">load_file</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">sm.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(), </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">())</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+    </span><span style="color:#7f8989;">// init lexer
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> lexer </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">init_lexer</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">lf);
+    </span><span style="color:#7f8989;">// init parser
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> parser </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">init_parser</span><span style="color:#1f1f1f;">(lexer);
+
+    parser
+        .</span><span style="color:#b39f04;">parse_module</span><span style="color:#1f1f1f;">()
+        .</span><span style="color:#b39f04;">map_err</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">e</span><span style="color:#1f1f1f;">| anyhow::Error::msg(</span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;error during module parsing: </span><span style="color:#aeb52b;">{:?}</span><span style="color:#d07711;">&quot;</span><span style="color:#1f1f1f;">, e)))
+}
+</span></code></pre>
+<p>Let's begin from the receiving a source file: </p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">// source map is swc data structure which represents source file
+// (its name, path, number of lines, etc)
+// Lrc it&#39;s swc&#39;s alias to Arc
+</span><span style="color:#668f14;">pub fn </span><span style="color:#c23f31;">init_source_map</span><span style="color:#1f1f1f;">() -&gt; Lrc&lt;SourceMap&gt; {
+    </span><span style="color:#a2a001;">Default</span><span style="color:#1f1f1f;">::default()
+}
+
+</span><span style="color:#668f14;">pub fn </span><span style="color:#c23f31;">load_file</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">sm</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">SourceMap, </span><span style="color:#5597d6;">path</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;Lrc&lt;SourceFile&gt;, io::Error&gt; {
+    </span><span style="color:#7f8989;">// sm offers api with which we can read a file
+    </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> path.</span><span style="color:#b39f04;">is_dir</span><span style="color:#1f1f1f;">() {
+        </span><span style="color:#7f8989;">// we can pass a dir
+        // instead of a concrete file
+        // in such a case we will lookup for a index.js
+        // inside that dir
+</span><span style="color:#1f1f1f;">        sm.</span><span style="color:#b39f04;">load_file</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">path.</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;index.js&quot;</span><span style="color:#1f1f1f;">))
+    } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> path_as_str </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> path
+            .</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">()
+            .</span><span style="color:#b39f04;">ok_or</span><span style="color:#1f1f1f;">(</span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;pathbuf: </span><span style="color:#aeb52b;">{:?}</span><span style="color:#d07711;"> to str converted&quot;</span><span style="color:#1f1f1f;">, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">path))
+            .</span><span style="color:#b39f04;">map_err</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">e</span><span style="color:#1f1f1f;">| std::io::Error::new(ErrorKind::Other, e))</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+        </span><span style="color:#72ab00;">if !</span><span style="color:#1f1f1f;">path_as_str.</span><span style="color:#b39f04;">ends_with</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;.js&quot;</span><span style="color:#1f1f1f;">) {
+            sm.</span><span style="color:#b39f04;">load_file</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf::from(</span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;</span><span style="color:#aeb52b;">{}</span><span style="color:#d07711;">.js&quot;</span><span style="color:#1f1f1f;">, path_as_str)))
+        } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+            sm.</span><span style="color:#b39f04;">load_file</span><span style="color:#1f1f1f;">(path)
+        }
+    }
+}
+</span></code></pre>
+<p>Now lexer initialization - just calling swc factory:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">pub fn </span><span style="color:#c23f31;">init_lexer</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">&gt;(</span><span style="color:#5597d6;">input_file</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">&#39;a </span><span style="color:#1f1f1f;">Lrc&lt;SourceFile&gt;) -&gt; Lexer&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">, StringInput&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">&gt;&gt; {
+    Lexer::new(
+        </span><span style="color:#7f8989;">// we are going to parse javascript
+        </span><span style="color:#1f1f1f;">Syntax::Es(</span><span style="color:#a2a001;">Default</span><span style="color:#1f1f1f;">::default()),
+        </span><span style="color:#7f8989;">// supported standart
+        </span><span style="color:#1f1f1f;">JscTarget::Es2015,
+        StringInput::from(</span><span style="color:#72ab00;">&amp;**</span><span style="color:#1f1f1f;">input_file),
+        </span><span style="color:#a2a001;">None</span><span style="color:#1f1f1f;">,
+    )
+}
+</span></code></pre>
+<p>The same with swc parser:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">pub fn </span><span style="color:#c23f31;">init_parser</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">&gt;(</span><span style="color:#5597d6;">lexer</span><span style="color:#1f1f1f;">: Lexer&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">, StringInput&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">&gt;&gt;) -&gt; Parser&lt;Lexer&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">, StringInput&lt;</span><span style="color:#668f14;">&#39;a</span><span style="color:#1f1f1f;">&gt;&gt;&gt; {
+    Parser::new_from(lexer)
+}
+</span></code></pre>
+<p>Now we can run our first test, see that it's passed and move on.<br />
+With parser we are ready for a transpilation step - transpile ecmamodules to commonjs modules.</p>
+<p>This is how we are going to do it - implement a dedicated function for that:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">test</span><span style="color:#1f1f1f;">]
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">transpiles_module</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file, file_path, dir, </span><span style="color:#72ab00;">_</span><span style="color:#1f1f1f;">) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">writeln!</span><span style="color:#1f1f1f;">(file, </span><span style="color:#d07711;">&quot;import </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">foo</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> from &#39;./foo.js&#39;;&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> sm </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">init_source_map</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> src </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">js_to_common_js</span><span style="color:#1f1f1f;">(</span><span style="color:#b39f04;">get_parsed_module</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">sm).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().body, sm);
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> u_src </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> src.</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(
+        u_src,
+        </span><span style="color:#668f14;">r</span><span style="color:#d07711;">#&quot;&quot;use strict&quot;;
+var _fooJs = require(&quot;./foo.js&quot;);
+&quot;#
+    </span><span style="color:#1f1f1f;">)
+}
+</span></code></pre>
+<p>And the implementation:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">js_to_common_js</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">module</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ModuleItem&gt;, </span><span style="color:#5597d6;">sm</span><span style="color:#1f1f1f;">: Lrc&lt;SourceMap&gt;) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">&gt; {
+    </span><span style="color:#7f8989;">// scoped thread-local storage
+    // reduces memory usage
+    // need to set for swc in order to avoid panic
+    </span><span style="color:#b3933a;">GLOBALS</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">set</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">Globals::new(), || {
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> transpiled_module </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">transpile_module_to_common_js</span><span style="color:#1f1f1f;">(module);
+
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> write_to </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> Output(Rc::new(Mutex::new(</span><span style="color:#a2a001;">vec!</span><span style="color:#1f1f1f;">[])));
+        </span><span style="color:#b39f04;">emit_source_code</span><span style="color:#1f1f1f;">(transpiled_module, sm, write_to.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">())</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> src </span><span style="color:#72ab00;">= &amp;*</span><span style="color:#1f1f1f;">write_to.</span><span style="color:#b3933a;">0.</span><span style="color:#b39f04;">lock</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;not poisoned&quot;</span><span style="color:#1f1f1f;">);
+        </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(std::str::from_utf8(src)</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">())
+    })
+}
+
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">transpile_module_to_common_js</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">module</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ModuleItem&gt;) -&gt; </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ModuleItem&gt; {
+    </span><span style="color:#b39f04;">common_js</span><span style="color:#1f1f1f;">(
+        </span><span style="color:#7f8989;">// a mark is a unique id associated with a macro expansion.
+        </span><span style="color:#1f1f1f;">Mark::fresh(Mark::root()),
+        </span><span style="color:#7f8989;">// how transform
+        </span><span style="color:#1f1f1f;">swc_ecma_transforms::modules::util::Config {
+            no_interop: </span><span style="color:#b3933a;">true</span><span style="color:#1f1f1f;">,
+            </span><span style="color:#72ab00;">..</span><span style="color:#a2a001;">Default</span><span style="color:#1f1f1f;">::default()
+        },
+    )
+    .</span><span style="color:#b39f04;">fold_module_items</span><span style="color:#1f1f1f;">(module)
+}
+
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">emit_source_code</span><span style="color:#1f1f1f;">&lt;W: Write&gt;(
+    </span><span style="color:#5597d6;">module</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ModuleItem&gt;,
+    </span><span style="color:#5597d6;">sm</span><span style="color:#1f1f1f;">: Lrc&lt;SourceMap&gt;,
+    </span><span style="color:#5597d6;">writable</span><span style="color:#1f1f1f;">: W,
+) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;()&gt; {
+    Emitter {
+        cfg: </span><span style="color:#a2a001;">Default</span><span style="color:#1f1f1f;">::default(),
+        cm: sm.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(),
+        wr: </span><span style="color:#a2a001;">Box</span><span style="color:#1f1f1f;">::new(JsWriter::new(sm.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(), </span><span style="color:#d07711;">&quot;</span><span style="color:#aeb52b;">\n</span><span style="color:#d07711;">&quot;</span><span style="color:#1f1f1f;">, writable, </span><span style="color:#a2a001;">None</span><span style="color:#1f1f1f;">)),
+        comments: </span><span style="color:#a2a001;">None</span><span style="color:#1f1f1f;">,
+    }
+    .</span><span style="color:#b39f04;">emit_module</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">Module {
+        body: module,
+        span: </span><span style="color:#a2a001;">Default</span><span style="color:#1f1f1f;">::default(),
+        shebang: </span><span style="color:#a2a001;">None</span><span style="color:#1f1f1f;">,
+    })</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+    </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(())
+}
+</span></code></pre>
+<p>The code above is basically an interaction with swc api. It's pretty declarative and you can go through it with your IDE and jump, explore if you are curious.
+Did you notice that type <strong>Output</strong>? Swc wants to receive something writable, which is behind Lrc(aka Arc) so that I just implemented the following wrapper:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">struct </span><span style="color:#c23f31;">Output</span><span style="color:#1f1f1f;">&lt;W&gt;(Rc&lt;Mutex&lt;W&gt;&gt;);
+
+</span><span style="color:#668f14;">impl</span><span style="color:#1f1f1f;">&lt;W: Write&gt; Write </span><span style="color:#72ab00;">for </span><span style="color:#c23f31;">Output</span><span style="color:#1f1f1f;">&lt;W&gt; {
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">write</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">buf</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">[</span><span style="color:#668f14;">u8</span><span style="color:#1f1f1f;">]) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#668f14;">usize</span><span style="color:#1f1f1f;">, io::Error&gt; {
+        (</span><span style="color:#72ab00;">*</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.</span><span style="color:#b3933a;">0.</span><span style="color:#b39f04;">lock</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">()).</span><span style="color:#b39f04;">write</span><span style="color:#1f1f1f;">(buf)
+    }
+
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">flush</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;(), io::Error&gt; {
+        (</span><span style="color:#72ab00;">*</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.</span><span style="color:#b3933a;">0.</span><span style="color:#b39f04;">lock</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">()).</span><span style="color:#b39f04;">flush</span><span style="color:#1f1f1f;">()
+    }
+}
+
+</span><span style="color:#668f14;">impl</span><span style="color:#1f1f1f;">&lt;W: Write&gt; Clone </span><span style="color:#72ab00;">for </span><span style="color:#c23f31;">Output</span><span style="color:#1f1f1f;">&lt;W&gt; {
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">clone</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">) -&gt; </span><span style="color:#668f14;">Self </span><span style="color:#1f1f1f;">{
+        Output(</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.</span><span style="color:#b3933a;">0.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">())
+    }
+}
+</span></code></pre>
+<p>Being able to transpile ecmamodules to commonjs modules now we are ready for modules analyzation step - read module, retrieve info, collect info, transpile it - all needed stuff for continous bundle generation. That new module will be called transformed module(maybe not so good name, anyway).<br />
+As usual let's begin from the test:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">test</span><span style="color:#1f1f1f;">]
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">transforms_module</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file, file_path, dir, name) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file1, file_path1, dir1, name1) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> s </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">r</span><span style="color:#d07711;">&quot;import </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">foo</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> from &#39;./</span><span style="color:#aeb52b;">{}</span><span style="color:#d07711;">&#39;;&quot;</span><span style="color:#1f1f1f;">, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">name); </span><span style="color:#7f8989;">//&amp;name1
+</span><span style="color:#1f1f1f;">    file.</span><span style="color:#b39f04;">write_all</span><span style="color:#1f1f1f;">(s.</span><span style="color:#b39f04;">as_bytes</span><span style="color:#1f1f1f;">()).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">writeln!</span><span style="color:#1f1f1f;">(file1, </span><span style="color:#d07711;">&quot;export const foo = 5;&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> sm </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">init_source_map</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> transformed_module </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">transform_module</span><span style="color:#1f1f1f;">(
+        </span><span style="color:#b39f04;">get_parsed_module</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">sm).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().body,
+        </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path,
+        sm,
+    );
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> transformed_u_module </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> transformed_module.</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(transformed_u_module.abs_path, file_path);
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(transformed_u_module.imports.</span><span style="color:#b39f04;">len</span><span style="color:#1f1f1f;">(), </span><span style="color:#b3933a;">1</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(
+        </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">transformed_u_module.imports[</span><span style="color:#b3933a;">0</span><span style="color:#1f1f1f;">].</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">()[</span><span style="color:#b3933a;">2</span><span style="color:#72ab00;">..</span><span style="color:#1f1f1f;">],
+        </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">name
+    );
+}
+</span></code></pre>
+<p>It was mentioned before that the transformed module is the module with all needed information for bundling. Let's be more precise:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">derive</span><span style="color:#1f1f1f;">(Debug, Clone)]
+</span><span style="color:#668f14;">struct </span><span style="color:#c23f31;">ParsedModule </span><span style="color:#1f1f1f;">{
+    </span><span style="color:#7f8989;">// module&#39;s unique id
+    // we will use uuid for that
+    </span><span style="color:#668f14;">pub </span><span style="color:#5597d6;">id</span><span style="color:#1f1f1f;">: String,
+    </span><span style="color:#7f8989;">// abs path to the file
+    </span><span style="color:#668f14;">pub </span><span style="color:#5597d6;">abs_path</span><span style="color:#1f1f1f;">: PathBuf,
+    </span><span style="color:#7f8989;">// like &quot;./index.js&quot;
+    </span><span style="color:#668f14;">pub </span><span style="color:#5597d6;">imports</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;PathBuf&gt;,
+    </span><span style="color:#7f8989;">// transpiled js
+    </span><span style="color:#668f14;">pub </span><span style="color:#5597d6;">source_code</span><span style="color:#1f1f1f;">: String,
+    </span><span style="color:#7f8989;">// import to import module id map
+    // such as &quot;./index.js&quot; -&gt; &quot;aoeu-037a-hstp-273s&quot;
+    </span><span style="color:#668f14;">pub </span><span style="color:#5597d6;">deps_map</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Option</span><span style="color:#1f1f1f;">&lt;HashMap&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">, </span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">&gt;&gt;,
+}
+</span></code></pre>
+<p>I suggest to discuss how the following attributes can be received:</p>
+<ul>
+<li>id -&gt; using Uuid</li>
+<li>abs_path -&gt; actually we receive when funtion is called,</li>
+<li>source_code -&gt; now we are able to transpile the code</li>
+<li>deps_map -&gt; now None. we will fill that in the future(when a modules graph will be traversed)</li>
+</ul>
+<p>The most interesting and complicated part is how we can receive all <strong>imports</strong>. For doing that swc also will be leveraged. Here we need to know that basically swc offers 2 main things for modules manipulations: traversing and folding. Traverse - it's just a passing modules hierarchy and making some conclusions, collecting some info. While folding is about ast manipulations/modifications. Since we need only to collect the data - visiting facilities will be used.
+For doing that firstly we need to implement trait Visit: </p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">struct </span><span style="color:#c23f31;">ImportsTraverser </span><span style="color:#1f1f1f;">{
+</span><span style="color:#1f1f1f;">   </span><span style="color:#5597d6;">imports</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">&gt;,
+}
+
+</span><span style="color:#668f14;">impl </span><span style="color:#1f1f1f;">Visit </span><span style="color:#72ab00;">for </span><span style="color:#c23f31;">ImportsTraverser </span><span style="color:#1f1f1f;">{
+</span><span style="color:#1f1f1f;">   </span><span style="color:#7f8989;">// use defaults traverses for not implemented traverse types from our side
+</span><span style="color:#1f1f1f;">   </span><span style="color:#7f8989;">// since we are interesting only in those where imports can be present.
+</span><span style="color:#1f1f1f;">   </span><span style="color:#a2a001;">noop_visit_type!</span><span style="color:#1f1f1f;">();
+
+</span><span style="color:#1f1f1f;">   </span><span style="color:#7f8989;">// So every type of ast has a dediacted traverser
+</span><span style="color:#1f1f1f;">   </span><span style="color:#7f8989;">// we receive its root and can pattern match against things 
+</span><span style="color:#1f1f1f;">   </span><span style="color:#7f8989;">// in which we are interested in
+</span><span style="color:#1f1f1f;">   </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">visit_module_decl</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">n</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">ModuleDecl, </span><span style="color:#5597d6;">_parent</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dyn Node) {
+</span><span style="color:#1f1f1f;">       </span><span style="color:#72ab00;">match</span><span style="color:#1f1f1f;"> n {
+</span><span style="color:#1f1f1f;">           </span><span style="color:#7f8989;">// just pattern match against ast node type we are interested in
+</span><span style="color:#1f1f1f;">           </span><span style="color:#7f8989;">// I found that type just by exploring tha produced ast from tests
+</span><span style="color:#1f1f1f;">           ModuleDecl::Import(decl) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.imports.</span><span style="color:#b39f04;">push</span><span style="color:#1f1f1f;">(decl.src.value.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">()),
+</span><span style="color:#1f1f1f;">           </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+</span><span style="color:#1f1f1f;">       }
+
+</span><span style="color:#1f1f1f;">       </span><span style="color:#7f8989;">// do our stuff but continue traversing
+</span><span style="color:#1f1f1f;">       n.</span><span style="color:#b39f04;">visit_children_with</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">)
+</span><span style="color:#1f1f1f;">   }
+</span><span style="color:#1f1f1f;">   
+</span><span style="color:#1f1f1f;">   </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">visit_module_item</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">n</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">ModuleItem, </span><span style="color:#5597d6;">_parent</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dyn Node) {
+</span><span style="color:#1f1f1f;">       </span><span style="color:#72ab00;">match</span><span style="color:#1f1f1f;"> n {
+</span><span style="color:#1f1f1f;">           ModuleItem::ModuleDecl(ModuleDecl::Import(decl)) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+</span><span style="color:#1f1f1f;">               </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.imports.</span><span style="color:#b39f04;">push</span><span style="color:#1f1f1f;">(decl.src.value.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">())
+</span><span style="color:#1f1f1f;">           }
+</span><span style="color:#1f1f1f;">           </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+</span><span style="color:#1f1f1f;">       }
+
+</span><span style="color:#1f1f1f;">       n.</span><span style="color:#b39f04;">visit_children_with</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">)
+</span><span style="color:#1f1f1f;">   }
+}
+</span></code></pre>
+<p>Since our intermediate goal is to make possible to run esmodules based code that's enough. In future when we needed to use packages from node_modules additional things will be added(since node_modules are commonjs based, but not esmodules based).</p>
+<p>And now we have all needed in order to implement the <code>transform_module</code> function itself:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">transform_module</span><span style="color:#1f1f1f;">(
+</span><span style="color:#1f1f1f;">   </span><span style="color:#5597d6;">items</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ModuleItem&gt;,
+</span><span style="color:#1f1f1f;">   </span><span style="color:#5597d6;">path_to_module</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf,
+</span><span style="color:#1f1f1f;">   </span><span style="color:#5597d6;">sm</span><span style="color:#1f1f1f;">: Lrc&lt;SourceMap&gt;,
+) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt; {
+</span><span style="color:#1f1f1f;">   </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> imports: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;PathBuf&gt; </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> items
+</span><span style="color:#1f1f1f;">       .</span><span style="color:#b39f04;">iter</span><span style="color:#1f1f1f;">()
+</span><span style="color:#1f1f1f;">       .</span><span style="color:#b39f04;">map</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">m</span><span style="color:#1f1f1f;">| {
+</span><span style="color:#1f1f1f;">           </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> t </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> ImportsTraverser { imports: </span><span style="color:#a2a001;">vec!</span><span style="color:#1f1f1f;">[] };
+</span><span style="color:#1f1f1f;">           m.</span><span style="color:#b39f04;">visit_with</span><span style="color:#1f1f1f;">(m, </span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> t);
+</span><span style="color:#1f1f1f;">           t.imports
+</span><span style="color:#1f1f1f;">       })
+</span><span style="color:#1f1f1f;">       .</span><span style="color:#b39f04;">flatten</span><span style="color:#1f1f1f;">()
+</span><span style="color:#1f1f1f;">       .</span><span style="color:#b39f04;">map</span><span style="color:#1f1f1f;">(PathBuf::from)
+</span><span style="color:#1f1f1f;">       </span><span style="color:#7f8989;">// filter for repeated imports
+</span><span style="color:#1f1f1f;">       .collect::&lt;HashSet&lt;PathBuf&gt;&gt;()
+</span><span style="color:#1f1f1f;">       .</span><span style="color:#b39f04;">iter</span><span style="color:#1f1f1f;">()
+</span><span style="color:#1f1f1f;">       .</span><span style="color:#b39f04;">map</span><span style="color:#1f1f1f;">(PathBuf::from)
+</span><span style="color:#1f1f1f;">       .collect::&lt;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;PathBuf&gt;&gt;();
+
+</span><span style="color:#1f1f1f;">   </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(ParsedModule {
+</span><span style="color:#1f1f1f;">       id: Uuid::new_v4().</span><span style="color:#b39f04;">to_hyphenated</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(),
+</span><span style="color:#1f1f1f;">       abs_path: path_to_module.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(),
+</span><span style="color:#1f1f1f;">       imports,
+</span><span style="color:#1f1f1f;">       source_code: </span><span style="color:#b39f04;">js_to_common_js</span><span style="color:#1f1f1f;">(items.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(), sm)</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">,
+</span><span style="color:#1f1f1f;">       </span><span style="color:#7f8989;">// will be set in the future as it was mentioned
+</span><span style="color:#1f1f1f;">       deps_map: </span><span style="color:#a2a001;">None</span><span style="color:#1f1f1f;">,
+</span><span style="color:#1f1f1f;">   })
+}
+</span></code></pre>
+<p>After tha <code>transforms_module</code> test should be green and we are moving on.
+We are able to parse the module, now we can implement the modules hierarchy builder.
+Another test for it:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">test</span><span style="color:#1f1f1f;">]
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">builds_deps_hierarchy</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file, file_path, dir, name) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file1, file_path1, name1) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file_at_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dir);
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> s </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">r</span><span style="color:#d07711;">&quot;import </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">foo</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> from &#39;./</span><span style="color:#aeb52b;">{}</span><span style="color:#d07711;">&#39;;&quot;</span><span style="color:#1f1f1f;">, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">name1); </span><span style="color:#7f8989;">//&amp;name1
+</span><span style="color:#1f1f1f;">    file.</span><span style="color:#b39f04;">write_all</span><span style="color:#1f1f1f;">(s.</span><span style="color:#b39f04;">as_bytes</span><span style="color:#1f1f1f;">()).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">writeln!</span><span style="color:#1f1f1f;">(file1, </span><span style="color:#d07711;">&quot;export const foo = 5;&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> root_with_deps_top_down </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_deps_tree</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path);
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> u_root_with_deps_top_down </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> root_with_deps_top_down.</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(u_root_with_deps_top_down.</span><span style="color:#b39f04;">len</span><span style="color:#1f1f1f;">(), </span><span style="color:#b3933a;">2</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(u_root_with_deps_top_down[</span><span style="color:#b3933a;">1</span><span style="color:#1f1f1f;">].abs_path, file_path1);
+}
+</span></code></pre>
+<p>We expect that <code>create_deps_tree</code> will give us all needed modules aka files which are used with the root at first position. Basically those are independent in the sense that every module can be treated individually. Bundler is only interested in the root module because it's the module from which a bundling process bootstraps.
+In order to get all transformed modules we need to do a top down traverse. We get the root module, check its imports and push them into a traverse queue. Then the dependencies of those imports. And so on and so on.</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">create_deps_tree</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">root</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt;&gt; {
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> parsed_root </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">get_transformed_module</span><span style="color:#1f1f1f;">(root)</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+    </span><span style="color:#7f8989;">// tmp comment
+    // we&#39;ll go back to it in a few minutes
+    // let node_modules = scan_node_modules();
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> node_modules </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">HashSet::new();
+
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> transformed_modules: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt; </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">vec!</span><span style="color:#1f1f1f;">[parsed_root.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">()];
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> modules_to_traverse: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt; </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">vec!</span><span style="color:#1f1f1f;">[parsed_root];
+
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> cache: HashMap&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">, ParsedModule&gt; </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">HashMap::new();
+    
+    </span><span style="color:#7f8989;">// let&#39;s cache created modules and use them instead of creating duplicates
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> cache: HashMap&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">, ParsedModule&gt; </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">HashMap::new();
+    </span><span style="color:#72ab00;">while !</span><span style="color:#1f1f1f;">modules_to_traverse.</span><span style="color:#b39f04;">is_empty</span><span style="color:#1f1f1f;">() {
+        </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> new_modules </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">vec!</span><span style="color:#1f1f1f;">[];
+        </span><span style="color:#72ab00;">for</span><span style="color:#1f1f1f;"> module </span><span style="color:#72ab00;">in</span><span style="color:#1f1f1f;"> modules_to_traverse.</span><span style="color:#b39f04;">iter_mut</span><span style="color:#1f1f1f;">() {
+            </span><span style="color:#72ab00;">for</span><span style="color:#1f1f1f;"> dep </span><span style="color:#72ab00;">in</span><span style="color:#1f1f1f;"> module.imports.</span><span style="color:#b39f04;">iter</span><span style="color:#1f1f1f;">() {
+                </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> dependency_path </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">get_dependency_path</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dep, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">module.abs_path, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">node_modules)</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+
+                </span><span style="color:#7f8989;">// if in cache -&gt; use already transformed module
+                // else evaluate and cache
+                </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> dep_info </span><span style="color:#72ab00;">=
+                    if</span><span style="color:#1f1f1f;"> cache.</span><span style="color:#b39f04;">contains_key</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dependency_path.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">()) {
+                        cache
+                            .</span><span style="color:#b39f04;">get</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dependency_path.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">())
+                            .</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">()
+                            .</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">()
+                    } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+                        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> dep_info </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">get_transformed_module</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dependency_path)</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+                        cache.</span><span style="color:#b39f04;">insert</span><span style="color:#1f1f1f;">(
+                            dep_info.abs_path.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(),
+                            dep_info.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(),
+                        );
+                        new_modules.</span><span style="color:#b39f04;">push</span><span style="color:#1f1f1f;">(dep_info.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">());
+
+                        dep_info
+                    };
+
+                </span><span style="color:#7f8989;">// probably HashMap can be used instead
+                </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> m </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> transformed_modules
+                    .</span><span style="color:#b39f04;">iter_mut</span><span style="color:#1f1f1f;">()
+                    .</span><span style="color:#b39f04;">find</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">item</span><span style="color:#1f1f1f;">| item.id </span><span style="color:#72ab00;">==</span><span style="color:#1f1f1f;"> module.id)
+                    .</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;module is present&quot;</span><span style="color:#1f1f1f;">);
+                </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> m.deps_map.</span><span style="color:#b39f04;">is_none</span><span style="color:#1f1f1f;">() {
+                    m.deps_map </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">Some</span><span style="color:#1f1f1f;">(std::collections::HashMap::new());
+                }
+                m.deps_map.</span><span style="color:#b39f04;">as_mut</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">insert</span><span style="color:#1f1f1f;">(
+                    dep.</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;converted&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(),
+                    dep_info.id.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">(),
+                );
+            }
+        }
+        transformed_modules.</span><span style="color:#b39f04;">append</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> new_modules.</span><span style="color:#b39f04;">clone</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">into_iter</span><span style="color:#1f1f1f;">().collect::&lt;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#72ab00;">_</span><span style="color:#1f1f1f;">&gt;&gt;());
+        modules_to_traverse </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> new_modules.</span><span style="color:#b39f04;">into_iter</span><span style="color:#1f1f1f;">().collect::&lt;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt;&gt;();
+    }
+
+    </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(transformed_modules)
+}
+</span></code></pre>
+<p>Well, that one a little big. Probably it's time to think about some <strong>Bundler</strong> struct and split that into multiple functions. But I'll move one.</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">get_dependency_path</span><span style="color:#1f1f1f;">(
+    </span><span style="color:#5597d6;">dep_relative_root_path</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf,
+    </span><span style="color:#5597d6;">parent_abs_path</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf,
+    </span><span style="color:#5597d6;">node_modules</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">HashSet&lt;PathBuf&gt;,
+) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;PathBuf&gt; {
+    </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> dep_relative_root_path.</span><span style="color:#b39f04;">is_absolute</span><span style="color:#1f1f1f;">() {
+        </span><span style="color:#a2a001;">Err</span><span style="color:#1f1f1f;">(anyhow::Error::msg(
+            </span><span style="color:#d07711;">&quot;doesn&#39;t work with absolute paths&quot;</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(),
+        ))
+    } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+        </span><span style="color:#7f8989;">// node_modules related
+        // will touch it in a few minutes
+        // if starts_from(&amp;dep_relative_root_path, &amp;node_modules) {
+        //    Ok(PathBuf::from(&quot;node_modules&quot;).join(dep_relative_root_path))
+        // } else {
+            </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> file_name </span><span style="color:#72ab00;">= &amp;</span><span style="color:#1f1f1f;">dep_relative_root_path
+                .</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">()
+                .</span><span style="color:#b39f04;">ok_or</span><span style="color:#1f1f1f;">(</span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(
+                    </span><span style="color:#d07711;">&quot;pathbuf: </span><span style="color:#aeb52b;">{:?}</span><span style="color:#d07711;"> to str converted&quot;</span><span style="color:#1f1f1f;">,
+                    </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dep_relative_root_path
+                ))
+                .</span><span style="color:#b39f04;">map_err</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">e</span><span style="color:#1f1f1f;">| anyhow::Error::msg(e))</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">[</span><span style="color:#b3933a;">2</span><span style="color:#72ab00;">..</span><span style="color:#1f1f1f;">];
+            </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> parent_abs_path.</span><span style="color:#b39f04;">is_dir</span><span style="color:#1f1f1f;">() {
+                </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(parent_abs_path.</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_name))
+            } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+                </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> dir </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">get_path_to_file_parent_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">parent_abs_path);
+                </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(dir.</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_name))
+            }
+        </span><span style="color:#7f8989;">// }
+    </span><span style="color:#1f1f1f;">}
+}
+</span></code></pre>
+<p>Now we should see that our <code>builds_deps_hierarchy</code> should pass.<br />
+Finally we can begin to write the code for bundling:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">#[</span><span style="color:#5597d6;">test</span><span style="color:#1f1f1f;">]
+</span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">generates_bundle_code</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file, file_path, dir, name) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#668f14;">let </span><span style="color:#1f1f1f;">(</span><span style="color:#668f14;">mut</span><span style="color:#1f1f1f;"> file1, file_path1, name1) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_tmp_file_at_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dir);
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> s </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(
+        </span><span style="color:#668f14;">r</span><span style="color:#d07711;">&quot;import </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">foo</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> from &#39;./</span><span style="color:#aeb52b;">{}</span><span style="color:#d07711;">&#39;;
+console.log(foo)&quot;</span><span style="color:#1f1f1f;">,
+        </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">name1
+    );
+    file.</span><span style="color:#b39f04;">write_all</span><span style="color:#1f1f1f;">(s.</span><span style="color:#b39f04;">as_bytes</span><span style="color:#1f1f1f;">()).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#a2a001;">writeln!</span><span style="color:#1f1f1f;">(file1, </span><span style="color:#d07711;">&quot;export const foo = 5;&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> src </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">generate_bundle</span><span style="color:#1f1f1f;">(</span><span style="color:#b39f04;">create_deps_tree</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_path).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">());
+
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> bundle </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">File::create(dir.</span><span style="color:#b39f04;">path</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;bundle.js&quot;</span><span style="color:#1f1f1f;">)).</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;bundle.js created&quot;</span><span style="color:#1f1f1f;">);
+    bundle
+        .</span><span style="color:#b39f04;">write_all</span><span style="color:#1f1f1f;">(src.</span><span style="color:#b39f04;">as_bytes</span><span style="color:#1f1f1f;">())
+        .</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;bundle has written&quot;</span><span style="color:#1f1f1f;">);
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> stderr_path </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> dir.</span><span style="color:#b39f04;">path</span><span style="color:#1f1f1f;">().</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;stderr&quot;</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> cmd </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">Command::new(</span><span style="color:#d07711;">&quot;node&quot;</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#668f14;">let mut</span><span style="color:#1f1f1f;"> child </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> cmd
+        .</span><span style="color:#b39f04;">args</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">[</span><span style="color:#d07711;">&quot;bundle.js&quot;</span><span style="color:#1f1f1f;">])
+        .</span><span style="color:#b39f04;">current_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dir)
+        .</span><span style="color:#b39f04;">stdout</span><span style="color:#1f1f1f;">(File::create(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">stderr_path).</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">())
+        .</span><span style="color:#b39f04;">spawn</span><span style="color:#1f1f1f;">()
+        .</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;bundle execution started&quot;</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#b39f04;">sleep</span><span style="color:#1f1f1f;">(Duration::from_secs(</span><span style="color:#b3933a;">1</span><span style="color:#1f1f1f;">));
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> content </span><span style="color:#72ab00;">=
+        </span><span style="color:#1f1f1f;">std::fs::read_to_string(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">stderr_path).</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;unable to read from stderr file&quot;</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#a2a001;">assert_eq!</span><span style="color:#1f1f1f;">(content, </span><span style="color:#d07711;">&quot;5</span><span style="color:#aeb52b;">\n</span><span style="color:#d07711;">&quot;</span><span style="color:#1f1f1f;">);
+}
+</span></code></pre>
+<p>The test bundles files into one module and tries to run it with Node.js. We subscribe on its stdout so that we can collect it and match against expected values.</p>
+<p>Now let's discuss how we are going to generate the resulted bundle in more detail. We already saw the idea how we can leverage <code>require</code> for our goal. Also we already know that we need to start from the root module. Basically we can split our bundle into 3 parts: creating a specific <code>require</code> function, passing modules and bootstraping.</p>
+<p>Firstly let's take a look at how our passed modules will be looked like: </p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#1f1f1f;">{
+  </span><span style="color:#d07711;">&quot;8e840584-99d7-413a-abb1-867357953d0d&quot;</span><span style="color:#1f1f1f;">: {
+    </span><span style="color:#c23f31;">wrapped_module</span><span style="color:#1f1f1f;">: (</span><span style="color:#5597d6;">module</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">exports</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">require</span><span style="color:#1f1f1f;">) </span><span style="color:#668f14;">=&gt; </span><span style="color:#1f1f1f;">{
+      </span><span style="color:#d07711;">&quot;use strict&quot;</span><span style="color:#1f1f1f;">;
+      </span><span style="color:#668f14;">var </span><span style="color:#5597d6;">_index2Js </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">require</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;./index2.js&quot;</span><span style="color:#1f1f1f;">);
+      </span><span style="color:#668f14;">var </span><span style="color:#5597d6;">_index3Js </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">require</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;./index3.js&quot;</span><span style="color:#1f1f1f;">);
+      </span><span style="color:#a2a001;">console</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">log</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">_index2Js</span><span style="color:#1f1f1f;">.foo </span><span style="color:#72ab00;">+ </span><span style="color:#5597d6;">_index3Js</span><span style="color:#1f1f1f;">.bar);
+    }</span><span style="color:#72ab00;">,
+    </span><span style="color:#5597d6;">deps_map</span><span style="color:#1f1f1f;">: {
+      </span><span style="color:#d07711;">&quot;./index3.js&quot;</span><span style="color:#1f1f1f;">: </span><span style="color:#d07711;">&quot;8be36e6a-eeb7-4ce4-8b11-040d6c8e8987&quot;</span><span style="color:#72ab00;">,
+      </span><span style="color:#d07711;">&quot;./index2.js&quot;</span><span style="color:#1f1f1f;">: </span><span style="color:#d07711;">&quot;1edc9be4-e93e-4e79-bb16-0d5ec19f3255&quot;</span><span style="color:#72ab00;">,
+    </span><span style="color:#1f1f1f;">}</span><span style="color:#72ab00;">,
+  </span><span style="color:#1f1f1f;">}</span><span style="color:#72ab00;">,
+  </span><span style="color:#7f8989;">// ...other_modules
+</span><span style="color:#1f1f1f;">}
+</span></code></pre>
+<p>So you can see that it contains from the actual module code + its dependencies.</p>
+<p>Now let's take a look on <code>require</code> function:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">const </span><span style="color:#5597d6;">require </span><span style="color:#72ab00;">= </span><span style="color:#5597d6;">id </span><span style="color:#668f14;">=&gt; </span><span style="color:#1f1f1f;">{
+    </span><span style="color:#7f8989;">// we have an access to all modules via `modules` var
+    // so that we fetch needed module&#39;s data
+    </span><span style="color:#668f14;">const </span><span style="color:#1f1f1f;">{</span><span style="color:#5597d6;">wrapped_module</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">deps_map</span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">= </span><span style="color:#5597d6;">modules</span><span style="color:#1f1f1f;">[</span><span style="color:#5597d6;">id</span><span style="color:#1f1f1f;">];
+    </span><span style="color:#7f8989;">// create a special unique require function for a particular require call
+    </span><span style="color:#668f14;">const </span><span style="color:#5597d6;">localRequire </span><span style="color:#72ab00;">= </span><span style="color:#5597d6;">requiredModuleName </span><span style="color:#668f14;">=&gt; </span><span style="color:#b39f04;">require</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">deps_map</span><span style="color:#1f1f1f;">[</span><span style="color:#5597d6;">requiredModuleName</span><span style="color:#1f1f1f;">]);
+    </span><span style="color:#7f8989;">// every require has its own scope
+    </span><span style="color:#668f14;">const </span><span style="color:#da5d42;">module </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">{exports: {}};
+    </span><span style="color:#7f8989;">// make a function call in the exports context
+    // module.exports and exports are passed
+    // because in the code we can write
+    // module.exports = {};
+    // and
+    // exports = {};
+    // it&#39;s related to node_modules
+    </span><span style="color:#5597d6;">wrapped_module</span><span style="color:#1f1f1f;">.</span><span style="color:#5597d6;">call</span><span style="color:#1f1f1f;">(</span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">.</span><span style="color:#da5d42;">exports</span><span style="color:#1f1f1f;">, </span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">, </span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">.</span><span style="color:#da5d42;">exports</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">localRequire</span><span style="color:#1f1f1f;">);
+    </span><span style="color:#72ab00;">return </span><span style="color:#da5d42;">module</span><span style="color:#1f1f1f;">.</span><span style="color:#da5d42;">exports</span><span style="color:#1f1f1f;">;
+}
+</span></code></pre>
+<p>With that when we are writing: </p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">// bar === exports
+</span><span style="color:#668f14;">let </span><span style="color:#5597d6;">bar </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">require</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;./foo.js&quot;</span><span style="color:#1f1f1f;">);
+</span></code></pre>
+<p>require is a function call. It receives a dependency name. Based on that we fetch needed function module(wrapped code + its dependencies). After that we prepare a clean modules object and make a wrapped_module wrapper. After that call our <strong>module</strong> export variable will be filled by all exports from the module and finally our <strong>bar</strong> variable will be with the value. But that's the case when &quot;./foo.js&quot; doesn't contain dependencies. If it does we will execute them. And so on and so forth. When all leaves are executed the same - we will receive from bottom to top our <strong>module</strong> exports.</p>
+<p>I think that we've discussed how it works. Now we only need to write the code:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">generate_bundle</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">modules_hierarchy</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt;) -&gt; String {
+    </span><span style="color:#7f8989;">// transformed modules to module&#39;s form
+    // which we just discussed
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> modules_executables: </span><span style="color:#a2a001;">String </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> modules_hierarchy
+        .</span><span style="color:#b39f04;">iter</span><span style="color:#1f1f1f;">()
+        .</span><span style="color:#b39f04;">map</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">module</span><span style="color:#1f1f1f;">| {
+            </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> module_deps </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">{
+                </span><span style="color:#7f8989;">// dependent module should be serialized 
+                // into javascript object(Rust HashMap -&gt; Js object)
+                // if it&#39;s present
+                </span><span style="color:#72ab00;">if </span><span style="color:#668f14;">let </span><span style="color:#a2a001;">Some</span><span style="color:#1f1f1f;">(map) </span><span style="color:#72ab00;">= &amp;</span><span style="color:#1f1f1f;">module.deps_map.</span><span style="color:#b39f04;">as_ref</span><span style="color:#1f1f1f;">() {
+                    serde_json::to_string(map).</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;deps map into json serialized&quot;</span><span style="color:#1f1f1f;">)
+                } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+                    </span><span style="color:#d07711;">&quot;{}&quot;</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">to_owned</span><span style="color:#1f1f1f;">()
+                }
+            };
+            </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(
+                </span><span style="color:#d07711;">&quot;</span><span style="color:#aeb52b;">\&quot;{module_id}\&quot;</span><span style="color:#d07711;">: </span><span style="color:#aeb52b;">{{
+</span><span style="color:#d07711;">              factory: (module, exports, require) =&gt; </span><span style="color:#aeb52b;">{{
+                {module_source_code}
+              }}</span><span style="color:#d07711;">,
+              map: </span><span style="color:#aeb52b;">{module_deps}
+	    }}</span><span style="color:#d07711;">&quot;</span><span style="color:#1f1f1f;">,
+                module_id </span><span style="color:#72ab00;">= &amp;</span><span style="color:#1f1f1f;">module.id,
+                module_source_code </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> module.source_code,
+                module_deps </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> module_deps
+            )
+        })
+        .collect::&lt;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">&gt;&gt;()
+        .</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;,&quot;</span><span style="color:#1f1f1f;">);
+
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> bundler_core </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(
+        </span><span style="color:#d07711;">&quot;
+(function(modules)</span><span style="color:#aeb52b;">{{
+</span><span style="color:#d07711;">    const require = id =&gt; </span><span style="color:#aeb52b;">{{
+</span><span style="color:#d07711;">      const </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">factory, map</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> = modules[id];
+      const localRequire = requireDeclarationName =&gt; require(map[requireDeclarationName]);
+      const module = </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">exports: </span><span style="color:#aeb52b;">{{}}}}</span><span style="color:#d07711;">;
+      factory.call(module.exports, module, module.exports, localRequire);
+      return module.exports;
+    </span><span style="color:#aeb52b;">}}
+</span><span style="color:#d07711;">    require(</span><span style="color:#aeb52b;">\&quot;{root_module_id}\&quot;</span><span style="color:#d07711;">);
+  </span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;">)(</span><span style="color:#aeb52b;">{{ {modules} }}</span><span style="color:#d07711;">)
+&quot;</span><span style="color:#1f1f1f;">,
+        root_module_id </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> modules_hierarchy.</span><span style="color:#b39f04;">get</span><span style="color:#1f1f1f;">(</span><span style="color:#b3933a;">0</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;source root is present&quot;</span><span style="color:#1f1f1f;">).id,
+        modules </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> modules_executables
+    );
+
+    bundler_core
+}
+</span></code></pre>
+<p>After that the test <code>generates_bundle_code</code> should be green. </p>
+<p>For playing with that as a bin application let's write the main function:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">main</span><span style="color:#1f1f1f;">() -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;()&gt; {
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> args: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#a2a001;">String</span><span style="color:#1f1f1f;">&gt; </span><span style="color:#72ab00;">= </span><span style="color:#1f1f1f;">env::args().</span><span style="color:#b39f04;">collect</span><span style="color:#1f1f1f;">();
+    </span><span style="color:#72ab00;">if </span><span style="color:#668f14;">let </span><span style="color:#a2a001;">Some</span><span style="color:#1f1f1f;">(entry) </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> args.</span><span style="color:#b39f04;">get</span><span style="color:#1f1f1f;">(</span><span style="color:#b3933a;">1</span><span style="color:#1f1f1f;">) {
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> root_with_deps_top_down </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">create_deps_tree</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf::from(entry));
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> u_root_with_deps_top_down </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> root_with_deps_top_down.</span><span style="color:#b39f04;">unwrap</span><span style="color:#1f1f1f;">();
+        </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> src </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">generate_bundle</span><span style="color:#1f1f1f;">(u_root_with_deps_top_down);
+
+        std::fs::write(</span><span style="color:#d07711;">&quot;out.js&quot;</span><span style="color:#1f1f1f;">, src)</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">;
+
+        </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(())
+    } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+        </span><span style="color:#a2a001;">Err</span><span style="color:#1f1f1f;">(anyhow::Error::msg(
+            </span><span style="color:#d07711;">&quot;entry point should be provided&quot;</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(),
+        ))
+    }
+}
+</span></code></pre>
+<p>I suggest to create a test dir for our tries.</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#b39f04;">cd</span><span style="color:#1f1f1f;"> src
+</span><span style="color:#5597d6;">mkdir</span><span style="color:#1f1f1f;"> test
+</span><span style="color:#b39f04;">cd</span><span style="color:#1f1f1f;"> test
+</span></code></pre>
+<p>Now index.js</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#72ab00;">import </span><span style="color:#1f1f1f;">{ </span><span style="color:#5597d6;">foo </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&quot;./index2.js&quot;</span><span style="color:#1f1f1f;">;
+</span><span style="color:#72ab00;">import </span><span style="color:#1f1f1f;">{ </span><span style="color:#5597d6;">bar </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&quot;./index3.js&quot;</span><span style="color:#1f1f1f;">;
+</span><span style="color:#72ab00;">import </span><span style="color:#5597d6;">baz </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&quot;./index4.js&quot;</span><span style="color:#1f1f1f;">;
+
+</span><span style="color:#a2a001;">console</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">log</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">foo </span><span style="color:#72ab00;">+ </span><span style="color:#5597d6;">bar </span><span style="color:#72ab00;">+ </span><span style="color:#5597d6;">baz</span><span style="color:#1f1f1f;">);
+</span></code></pre>
+<p>index2.js:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#72ab00;">export </span><span style="color:#668f14;">const </span><span style="color:#5597d6;">foo </span><span style="color:#72ab00;">= </span><span style="color:#b3933a;">2</span><span style="color:#1f1f1f;">;
+</span></code></pre>
+<p>index3.js</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#72ab00;">export </span><span style="color:#668f14;">const </span><span style="color:#5597d6;">bar </span><span style="color:#72ab00;">= </span><span style="color:#b3933a;">5</span><span style="color:#1f1f1f;">;
+</span></code></pre>
+<p>index4.js</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#72ab00;">import </span><span style="color:#1f1f1f;">{ </span><span style="color:#5597d6;">foo </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&#39;./index2.js&#39; 
+</span><span style="color:#72ab00;">import </span><span style="color:#1f1f1f;">{ </span><span style="color:#5597d6;">bar </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">from </span><span style="color:#d07711;">&#39;./index3.js&#39; 
+
+</span><span style="color:#668f14;">const </span><span style="color:#5597d6;">baz </span><span style="color:#72ab00;">= </span><span style="color:#5597d6;">foo </span><span style="color:#72ab00;">+ </span><span style="color:#5597d6;">bar</span><span style="color:#1f1f1f;">;
+</span><span style="color:#72ab00;">export default </span><span style="color:#5597d6;">baz</span><span style="color:#1f1f1f;">;
+</span></code></pre>
+<p>Finally:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#5597d6;">cargo</span><span style="color:#1f1f1f;"> run index.js
+</span><span style="color:#5597d6;">node</span><span style="color:#1f1f1f;"> out.js
+</span><span style="color:#5597d6;">//</span><span style="color:#1f1f1f;"> 14
+</span></code></pre>
+<p>And congrats!! We've created a bundler which can bundle our local project! Let's take a rest a bit...</p>
+<p>But real projects are consisted from not only our own code but as well as external code. So it would be cute if we can to use external packages as well.<br />
+Let's do it.</p>
+<p>And I have good news - we need to add not so many lines.</p>
+<p>The first thing which should be added is traversing cases. Node modules are commonjs based, but not esmodules based. So it means that our code just won't compile.</p>
+<p>The idea is following. We can meet <strong>require</strong> in many places and we need to cover them. I just played with compiling and AST exploration in order to find them. So that I can't not guarantee that all cases are covered.</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">impl </span><span style="color:#c23f31;">ImportsTraverser </span><span style="color:#1f1f1f;">{
+    </span><span style="color:#7f8989;">// matcher for require
+    </span><span style="color:#668f14;">pub fn </span><span style="color:#c23f31;">match_require</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">sym</span><span style="color:#1f1f1f;">: String, </span><span style="color:#5597d6;">args</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ExprOrSpread&gt;) {
+        </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> sym.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">() </span><span style="color:#72ab00;">== </span><span style="color:#d07711;">&quot;require&quot; </span><span style="color:#1f1f1f;">{
+            </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> args.</span><span style="color:#b39f04;">len</span><span style="color:#1f1f1f;">() </span><span style="color:#72ab00;">== </span><span style="color:#b3933a;">1 </span><span style="color:#1f1f1f;">{
+                </span><span style="color:#72ab00;">match &amp;</span><span style="color:#1f1f1f;">args[</span><span style="color:#b3933a;">0</span><span style="color:#1f1f1f;">] {
+                    ExprOrSpread { expr, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">=&gt; match &amp;**</span><span style="color:#1f1f1f;">expr {
+                        Expr::Lit(Lit::Str(Str { value, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">})) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+                            </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.imports.</span><span style="color:#b39f04;">push</span><span style="color:#1f1f1f;">(value.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">());
+                        }
+                        </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                    },
+                }
+            }
+        }
+    }
+}
+
+</span><span style="color:#668f14;">impl </span><span style="color:#1f1f1f;">Visit </span><span style="color:#72ab00;">for </span><span style="color:#c23f31;">ImportsTraverser </span><span style="color:#1f1f1f;">{
+    </span><span style="color:#7f8989;">// ... previously added stuff
+
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">visit_module_item</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">n</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">ModuleItem, </span><span style="color:#5597d6;">_parent</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dyn Node) {
+        </span><span style="color:#72ab00;">match</span><span style="color:#1f1f1f;"> n {
+            ModuleItem::Stmt(Stmt::Expr(ExprStmt { expr, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">})) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+                </span><span style="color:#72ab00;">match &amp;**</span><span style="color:#1f1f1f;">expr {
+                    Expr::Call(CallExpr { callee, args, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">}) </span><span style="color:#72ab00;">=&gt; match</span><span style="color:#1f1f1f;"> callee {
+                        ExprOrSuper::Expr(i) </span><span style="color:#72ab00;">=&gt; match &amp;**</span><span style="color:#1f1f1f;">i {
+                            Expr::Ident(Ident { sym, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">}) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+                                </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">match_require</span><span style="color:#1f1f1f;">(sym.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(), args);
+                            }
+                            </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                        },
+                        </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                    },
+                    </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                }
+            }
+            ModuleItem::ModuleDecl(ModuleDecl::Import(decl)) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+                </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.imports.</span><span style="color:#b39f04;">push</span><span style="color:#1f1f1f;">(decl.src.value.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">())
+            }
+            </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+        }
+
+        n.</span><span style="color:#b39f04;">visit_children_with</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">)
+    }
+
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">visit_call_expr</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">n</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">CallExpr, </span><span style="color:#5597d6;">_parent</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dyn Node) {
+        </span><span style="color:#72ab00;">match</span><span style="color:#1f1f1f;"> n {
+            CallExpr { callee, args, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">=&gt; match</span><span style="color:#1f1f1f;"> callee {
+                ExprOrSuper::Expr(i) </span><span style="color:#72ab00;">=&gt; match &amp;**</span><span style="color:#1f1f1f;">i {
+                    Expr::Ident(Ident { sym, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">}) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+                        </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">match_require</span><span style="color:#1f1f1f;">(sym.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(), args);
+                    }
+                    </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                },
+                </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+            },
+        }
+
+        n.</span><span style="color:#b39f04;">visit_children_with</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">)
+    }
+
+    </span><span style="color:#668f14;">fn </span><span style="color:#c23f31;">visit_assign_expr</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#668f14;">mut </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">, </span><span style="color:#5597d6;">n</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">AssignExpr, </span><span style="color:#5597d6;">_parent</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dyn Node) {
+        </span><span style="color:#72ab00;">match</span><span style="color:#1f1f1f;"> n {
+            AssignExpr { right, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">=&gt; match &amp;**</span><span style="color:#1f1f1f;">right {
+                Expr::Call(CallExpr { callee, args, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">}) </span><span style="color:#72ab00;">=&gt; match</span><span style="color:#1f1f1f;"> callee {
+                    ExprOrSuper::Expr(i) </span><span style="color:#72ab00;">=&gt; match &amp;**</span><span style="color:#1f1f1f;">i {
+                        Expr::Ident(Ident { sym, </span><span style="color:#72ab00;">.. </span><span style="color:#1f1f1f;">}) </span><span style="color:#72ab00;">=&gt; </span><span style="color:#1f1f1f;">{
+                            </span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">match_require</span><span style="color:#1f1f1f;">(sym.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(), args);
+                        }
+                        </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                    },
+                    </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+                },
+                </span><span style="color:#72ab00;">_ =&gt; </span><span style="color:#1f1f1f;">(),
+            },
+        }
+
+        n.</span><span style="color:#b39f04;">visit_children_with</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">self</span><span style="color:#1f1f1f;">)
+    }
+}
+</span></code></pre>
+<p>Now: </p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">create_deps_tree</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">root</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;</span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt;&gt; {
+    </span><span style="color:#7f8989;">// ...
+
+    // do you remember this line?
+    // now we are ready to implement that function
+    // the basic idea behind it is
+    // when we encounter in the require something like
+    // require(&#39;react&#39;)
+    // we should ask whether it&#39;s node_modules package
+    // let node_modules = scan_node_modules();
+
+    // ...
+</span><span style="color:#1f1f1f;">}
+</span></code></pre><pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">scan_node_modules</span><span style="color:#1f1f1f;">() -&gt; HashSet&lt;PathBuf&gt; {
+    </span><span style="color:#72ab00;">if </span><span style="color:#668f14;">let </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(entries) </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">read_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;node_modules&quot;</span><span style="color:#1f1f1f;">) {
+        HashSet::from(
+            entries
+                .</span><span style="color:#b39f04;">into_iter</span><span style="color:#1f1f1f;">()
+                .</span><span style="color:#b39f04;">map</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">e</span><span style="color:#1f1f1f;">| {
+                    PathBuf::from(
+                        e.</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;entry&quot;</span><span style="color:#1f1f1f;">)
+                            .</span><span style="color:#b39f04;">path</span><span style="color:#1f1f1f;">()
+                            .</span><span style="color:#b39f04;">strip_prefix</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;node_modules&quot;</span><span style="color:#1f1f1f;">)
+                            .</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;node_modules prefix stripped&quot;</span><span style="color:#1f1f1f;">),
+                    )
+                })
+                .</span><span style="color:#b39f04;">collect</span><span style="color:#1f1f1f;">(),
+        )
+    } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+        HashSet::new()
+    }
+}
+</span></code></pre>
+<p>Now we can uncomment the code which is responsibe for that lookup. The idea behind a lookup now is a pretty straightforward - we try to find in the root(where entry is placed) <strong>node_modules</strong> dir with the import name. And there index.js. BTW it could not only be index.js, other entry point can be specified via package.json. But for our case it's enough as well as only one, near the entry point, node_modules lookup.</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">get_dependency_path</span><span style="color:#1f1f1f;">(
+    </span><span style="color:#5597d6;">dep_relative_root_path</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf,
+    </span><span style="color:#5597d6;">parent_abs_path</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">PathBuf,
+    </span><span style="color:#5597d6;">node_modules</span><span style="color:#1f1f1f;">: </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">HashSet&lt;PathBuf&gt;,
+) -&gt; </span><span style="color:#a2a001;">Result</span><span style="color:#1f1f1f;">&lt;PathBuf&gt; {
+    </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> dep_relative_root_path.</span><span style="color:#b39f04;">is_absolute</span><span style="color:#1f1f1f;">() {
+        </span><span style="color:#a2a001;">Err</span><span style="color:#1f1f1f;">(anyhow::Error::msg(
+            </span><span style="color:#d07711;">&quot;doesn&#39;t work with absolute paths&quot;</span><span style="color:#1f1f1f;">.</span><span style="color:#b39f04;">to_string</span><span style="color:#1f1f1f;">(),
+        ))
+    } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+</span><span style="color:#72ab00;">-        </span><span style="color:#7f8989;">// node_modules related
+</span><span style="color:#72ab00;">-        </span><span style="color:#7f8989;">// will touch it in a few minutes
+</span><span style="color:#72ab00;">-        </span><span style="color:#7f8989;">// if starts_from(&amp;dep_relative_root_path, &amp;node_modules) {
+</span><span style="color:#72ab00;">-        </span><span style="color:#7f8989;">//    Ok(PathBuf::from(&quot;node_modules&quot;).join(dep_relative_root_path))
+</span><span style="color:#72ab00;">-        </span><span style="color:#7f8989;">// } else {
+</span><span style="color:#72ab00;">+        </span><span style="color:#7f8989;">// so now if it&#39;s a node package we will generate a path to it
+</span><span style="color:#72ab00;">+        if </span><span style="color:#b39f04;">starts_from</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dep_relative_root_path, </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">node_modules) {
+</span><span style="color:#72ab00;">+            </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(PathBuf::from(</span><span style="color:#d07711;">&quot;node_modules&quot;</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(dep_relative_root_path))
+</span><span style="color:#72ab00;">+        </span><span style="color:#1f1f1f;">} </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+            </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> file_name </span><span style="color:#72ab00;">= &amp;</span><span style="color:#1f1f1f;">dep_relative_root_path
+                .</span><span style="color:#b39f04;">to_str</span><span style="color:#1f1f1f;">()
+                .</span><span style="color:#b39f04;">ok_or</span><span style="color:#1f1f1f;">(</span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(
+                    </span><span style="color:#d07711;">&quot;pathbuf: </span><span style="color:#aeb52b;">{:?}</span><span style="color:#d07711;"> to str converted&quot;</span><span style="color:#1f1f1f;">,
+                    </span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">dep_relative_root_path
+                ))
+                .</span><span style="color:#b39f04;">map_err</span><span style="color:#1f1f1f;">(|</span><span style="color:#5597d6;">e</span><span style="color:#1f1f1f;">| anyhow::Error::msg(e))</span><span style="color:#72ab00;">?</span><span style="color:#1f1f1f;">[</span><span style="color:#b3933a;">2</span><span style="color:#72ab00;">..</span><span style="color:#1f1f1f;">];
+            </span><span style="color:#72ab00;">if</span><span style="color:#1f1f1f;"> parent_abs_path.</span><span style="color:#b39f04;">is_dir</span><span style="color:#1f1f1f;">() {
+                </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(parent_abs_path.</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_name))
+            } </span><span style="color:#72ab00;">else </span><span style="color:#1f1f1f;">{
+                </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> dir </span><span style="color:#72ab00;">= </span><span style="color:#b39f04;">get_path_to_file_parent_dir</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">parent_abs_path);
+                </span><span style="color:#a2a001;">Ok</span><span style="color:#1f1f1f;">(dir.</span><span style="color:#b39f04;">join</span><span style="color:#1f1f1f;">(</span><span style="color:#72ab00;">&amp;</span><span style="color:#1f1f1f;">file_name))
+            }
+</span><span style="color:#72ab00;">-        </span><span style="color:#7f8989;">// }
+</span><span style="color:#72ab00;">+        </span><span style="color:#1f1f1f;">}
+    }
+}
+</span></code></pre>
+<p>And finally, one more thing. While building a react it looks for env variable in order to understand whether prod or dev build is needed.<br />
+So:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#668f14;">fn </span><span style="color:#c23f31;">generate_bundle</span><span style="color:#1f1f1f;">(</span><span style="color:#5597d6;">modules_hierarchy</span><span style="color:#1f1f1f;">: </span><span style="color:#a2a001;">Vec</span><span style="color:#1f1f1f;">&lt;ParsedModule&gt;) -&gt; String {
+    </span><span style="color:#7f8989;">// ...other stuff
+    
+    </span><span style="color:#668f14;">let</span><span style="color:#1f1f1f;"> bundler_core </span><span style="color:#72ab00;">= </span><span style="color:#a2a001;">format!</span><span style="color:#1f1f1f;">(
+        </span><span style="color:#d07711;">&quot;
+(function(modules)</span><span style="color:#aeb52b;">{{
+</span><span style="color:#d07711;">     // we inject a static env variable into the bundle
++    if (typeof window !== &#39;undefined&#39;) </span><span style="color:#aeb52b;">{{
+</span><span style="color:#d07711;">+    window.process = </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">env: </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">NODE_ENV: &#39;production&#39;</span><span style="color:#aeb52b;">}}}}</span><span style="color:#d07711;">;
++</span><span style="color:#aeb52b;">}}
+</span><span style="color:#d07711;">    const require = id =&gt; </span><span style="color:#aeb52b;">{{
+</span><span style="color:#d07711;">      const </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">wrapped_module, deps_map</span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;"> = modules[id];
+      const localRequire = requiredModuleName =&gt; require(deps_map[requiredModuleName]);
+      const module = </span><span style="color:#aeb52b;">{{</span><span style="color:#d07711;">exports: </span><span style="color:#aeb52b;">{{}}}}</span><span style="color:#d07711;">;
+      wrapped_module.call(module.exports, module, module.exports, localRequire);
+      return module.exports;
+    </span><span style="color:#aeb52b;">}}
+</span><span style="color:#d07711;">    require(</span><span style="color:#aeb52b;">\&quot;{root_module_id}\&quot;</span><span style="color:#d07711;">);
+  </span><span style="color:#aeb52b;">}}</span><span style="color:#d07711;">)(</span><span style="color:#aeb52b;">{{ {modules} }}</span><span style="color:#d07711;">)
+&quot;</span><span style="color:#1f1f1f;">,
+        root_module_id </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> modules_hierarchy.</span><span style="color:#b39f04;">get</span><span style="color:#1f1f1f;">(</span><span style="color:#b3933a;">0</span><span style="color:#1f1f1f;">).</span><span style="color:#b39f04;">expect</span><span style="color:#1f1f1f;">(</span><span style="color:#d07711;">&quot;source root is present&quot;</span><span style="color:#1f1f1f;">).id,
+        modules </span><span style="color:#72ab00;">=</span><span style="color:#1f1f1f;"> modules_executables
+    );
+    
+    </span><span style="color:#7f8989;">// ...other stuff
+</span><span style="color:#1f1f1f;">}
+</span></code></pre>
+<p>And that's it!</p>
+<p>Now we can bootstrap <strong>React hello world</strong> from the beginning:</p>
+<pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;"># src/test
+
+</span><span style="color:#5597d6;">npm</span><span style="color:#1f1f1f;"> i
+</span><span style="color:#5597d6;">npm</span><span style="color:#1f1f1f;"> add react react-dom
+</span></code></pre><pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">// src/test/index.js
+
+</span><span style="color:#1f1f1f;">import </span><span style="color:#72ab00;">* as</span><span style="color:#1f1f1f;"> React from </span><span style="color:#d07711;">&quot;react&quot;</span><span style="color:#1f1f1f;">;
+import </span><span style="color:#72ab00;">* as</span><span style="color:#1f1f1f;"> ReactDOM from </span><span style="color:#d07711;">&quot;react-dom&quot;</span><span style="color:#1f1f1f;">;
+
+class Hello extends React.Component {
+  </span><span style="color:#b39f04;">render</span><span style="color:#1f1f1f;">() {
+    </span><span style="color:#72ab00;">return</span><span style="color:#1f1f1f;"> React.createElement(</span><span style="color:#d07711;">&quot;div&quot;</span><span style="color:#1f1f1f;">, null, `Hello </span><span style="color:#72ab00;">$</span><span style="color:#1f1f1f;">{this.props.toWhat}`);
+  }
+}
+
+ReactDOM.</span><span style="color:#b39f04;">render</span><span style="color:#1f1f1f;">(
+  React.createElement(Hello, { toWhat: </span><span style="color:#d07711;">&quot;World&quot; </span><span style="color:#1f1f1f;">}, null),
+  document.getElementById(</span><span style="color:#d07711;">&quot;root&quot;</span><span style="color:#1f1f1f;">)
+);
+</span></code></pre><pre style="background-color:#f5f5f5;">
+<code><span style="color:#7f8989;">&lt;!-- src/test/index.html --&gt;
+</span><span style="color:#6486ab;">&lt;body&gt;
+    </span><span style="color:#7f902a;">&lt;noscript&gt;</span><span style="color:#1f1f1f;">You need to enable JavaScript to run this app.</span><span style="color:#7f902a;">&lt;/noscript&gt;
+    </span><span style="color:#6486ab;">&lt;div id=</span><span style="color:#d07711;">&quot;root&quot;</span><span style="color:#6486ab;">&gt;&lt;/div&gt;
+    &lt;script src=</span><span style="color:#d07711;">&quot;./out.js&quot;</span><span style="color:#6486ab;">&gt;&lt;/script&gt;
+&lt;/body&gt;
+</span></code></pre><pre style="background-color:#f5f5f5;">
+<code><span style="color:#5597d6;">cargo</span><span style="color:#1f1f1f;"> run index.js
+</span></code></pre>
+<p><img src="../hello_world_react_js_bundler.png" alt="hello_world_react_with_js_bundler" /></p>
+<h1 id="performance-not-objective-could-be-skipped">Performance(not objective, could be skipped)<a class="zola-anchor" href="#performance-not-objective-could-be-skipped" aria-label="Anchor link for: performance-not-objective-could-be-skipped">🔗</a></h1>
+<p>And a little comparison with webpack(I understand that it's incorrect to compare solutions because webpack is a more wider thing. But with its out of the box configuration I think that it will be at least interesting =)):</p>
+<p>Webpack with default config:</p>
+<p><img src="../js_bundle_time_webpack.png" alt="js_bundle_time_webpack" /></p>
+<p>Our bundler compiled in a release mode:
+<img src="../js_bundle_time_rust.png" alt="js_bundle_time_rust" /></p>
+<p>BTW I think it would be interesting to utilize threads for modules transformations.</p>
+<h1 id="afterwords">Afterwords<a class="zola-anchor" href="#afterwords" aria-label="Anchor link for: afterwords">🔗</a></h1>
+<p>While writing that post I could missed something(logically or forgot to update some peaces of the code from the repo).<br />
+It's not 100% working bundler - we achieved our goal, but probably there will be cases when it's crashed. The purpose was to demonstrate the core idea.<br />
+For those who are curious the working version can be found <a href="https://github.com/kakoc/myox_js_bundler">here</a>.</p>
+<p>I hope that it was useful and you enjoyed that post.</p>
+
+        </div>
+    </div>
+
+    </div>
+
+  <body>
+  </body>
+</html>
