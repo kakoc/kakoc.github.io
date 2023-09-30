@@ -3,14 +3,14 @@ title = "MYOX: Javascript bundler"
 description = "Let's create Javascript bundler"
 +++
 
-[MYOX: what does it mean?](@/blog/2021-06-17_myox.md)
+[MYOX: what does it mean?](@/blog/2020-06-29_myox.md)
 
 ## Preface
 
-Have you heard/used Webpack, Babel? Wanted to understand the basic ideas behind them?  
+Have you heard/used Webpack, Bable? Wanted to understand the basic ideas behind them?  
 
-In this blog post I'm going to create Javascript bundler and demonstrate how things like Babel can be leveraged there. But we won't use Babel.
-In Rust ecosystem we have our own Babel which is called [swc](https://github.com/swc-project/swc).
+In this blog post I'm going to create Javascript bundler and demonstrate how things like Bable can be leverage there. But we won't use Bable.
+In Rust ecosystem we have our own Bable which is called [swc](https://github.com/swc-project/swc).
 
 ## Final goal
 
@@ -89,14 +89,15 @@ All project I'm going to write in one **src/main.rs** file.
 ```rust
 // all used modules
 use anyhow::Result;
-use std::{
-    collections::{HashMap, HashSet},
-    env, fs, io,
-    io::{ErrorKind, Write},
-    path::PathBuf,
-    rc::Rc,
-    sync::Mutex,
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::env;
+use std::fs;
+use std::io;
+use std::io::{ErrorKind, Write};
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Mutex;
 use swc_common::{sync::Lrc, Globals, Mark, SourceFile, SourceMap, GLOBALS};
 use swc_ecma_ast::{
     AssignExpr, CallExpr, Expr, ExprOrSpread, ExprOrSuper, ExprStmt, Ident, Lit, Module,
@@ -118,19 +119,15 @@ The most important part that it's a function. And how a functions resolution doe
 ```js
 // panics in the browser because require is undefined
 // because window.require is undefined
-// i.e. we are trying to find it
-// in the global context
 require("./foo.js");
 ```
 
 ```js
+// it's not important
+// because we'll lookup from the inside out
 window.require = 'not important';
 
 function bar(require) {
-  // our window.require
-  // won't affect us
-  // because require==function arg
-  // will be used
   let foo = require("./foo.js");
 }
 
@@ -145,10 +142,9 @@ bar((path) => {
 So we can "overwrite" **require** and place there src of the required module. We will do that not exactly the same as in the example above and touch that in more detail in the future. Now our purpose is to understand the basic idea which will be used.  
 But now is 2020 and I want to write a code with esmodules, not with commonjs.
 In order to solve that problem we need to somehow transform our esmodules based code into commonjs based and only after that bundle the project.
-And here Babel, swc are used. Since we are in Rust ecosystem swc will be used.  
+And here Bable, swc are used. Since we are in Rust ecosystem swc will be used.  
 In order to convert esmodule to commonjs module we need to parse file and choose an appropriate strategy into which format we want to convert it.
 
-Enough talking, it's time to begin writing the code.  
 Let's create some test infrastructure. We need to create js files and store them somewhere. For that **tempfile** crate will be used:
 
 ```rust
@@ -190,6 +186,7 @@ fn successful_parsing() {
 
     let parsed_module = get_parsed_module(&file_path, &init_source_map());
 
+    assert!(parsed_module.is_ok());
     assert_eq!(parsed_module.unwrap().body.len(), 1);
 }
 ```
@@ -225,7 +222,7 @@ pub fn init_source_map() -> Lrc<SourceMap> {
     Default::default()
 }
 
-pub fn load_file(sm: &SourceMap, path: &PathBuf) -> Result<Lrc<SourceFile>, io::Error> {
+pub fn load_file(sm: &SourceMap, path: &PathBuf) -> Result<Lrc<SourceFile>, std::io::Error> {
     // sm offers api with which we can read a file
     if path.is_dir() {
         // we can pass a dir
@@ -284,7 +281,9 @@ fn transpiles_module() {
     let sm = init_source_map();
     let src = js_to_common_js(get_parsed_module(&file_path, &sm).unwrap().body, sm);
 
+    assert!(src.is_ok());
     let u_src = src.unwrap();
+    dbg!(&u_src);
     assert_eq!(
         u_src,
         r#""use strict";
@@ -352,11 +351,11 @@ Did you notice that type **Output**? Swc wants to receive something writable, wh
 struct Output<W>(Rc<Mutex<W>>);
 
 impl<W: Write> Write for Output<W> {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         (*self.0.lock().unwrap()).write(buf)
     }
 
-    fn flush(&mut self) -> Result<(), io::Error> {
+    fn flush(&mut self) -> io::Result<()> {
         (*self.0.lock().unwrap()).flush()
     }
 }
@@ -387,6 +386,7 @@ fn transforms_module() {
         sm,
     );
 
+    assert!(transformed_module.is_ok());
     let transformed_u_module = transformed_module.unwrap();
     assert_eq!(transformed_u_module.abs_path, file_path);
     assert_eq!(transformed_u_module.imports.len(), 1);
@@ -402,8 +402,6 @@ It was mentioned before that the transformed module is the module with all neede
 ```rust
 #[derive(Debug, Clone)]
 struct ParsedModule {
-    // module's unique id
-    // we will use uuid for that
     pub id: String,
     // abs path to the file
     pub abs_path: PathBuf,
@@ -515,7 +513,9 @@ fn builds_deps_hierarchy() {
     writeln!(file1, "export const foo = 5;").unwrap();
 
     let root_with_deps_top_down = create_deps_tree(&file_path);
+    assert!(root_with_deps_top_down.is_ok());
     let u_root_with_deps_top_down = root_with_deps_top_down.unwrap();
+    dbg!(&u_root_with_deps_top_down);
     assert_eq!(u_root_with_deps_top_down.len(), 2);
     assert_eq!(u_root_with_deps_top_down[1].abs_path, file_path1);
 }
@@ -698,7 +698,9 @@ const require = id => {
     const localRequire = requiredModuleName => require(deps_map[requiredModuleName]);
     // every require has its own scope
     const module = {exports: {}};
-    // make a function call in the exports context
+    // probably we can do: wrapped_module(module, module.exports, localRequire)
+    // but wepback does differently
+    // so that the context is correct
     // module.exports and exports are passed
     // because in the code we can write
     // module.exports = {};
@@ -855,7 +857,7 @@ And I have good news - we need to add not so many lines.
 
 The first thing which should be added is traversing cases. Node modules are commonjs based, but not esmodules based. So it means that our code just won't compile.
 
-The idea is following. We can meet **require** in many places and we need to cover them. I just played with compiling and AST exploration in order to find them. So that I can't not guarantee that all cases are covered.
+The idea is following. We can meet **require** in many places and we need to cover tham. I just played with compiling and AST exploration in order to find them. So that I can't not guarantee that all cases are covered.
 
 ```rust
 impl ImportsTraverser {
@@ -1114,8 +1116,7 @@ BTW I think it would be interesting to utilize threads for modules transformatio
 
 
 # Afterwords
-While writing that post I could missed something(logically or forgot to update some peaces of the code from the repo).  
-It's not 100% working bundler - we achieved our goal, but probably there will be cases when it's crashed. The purpose was to demonstrate the core idea.  
-For those who are curious the working version can be found [here](https://github.com/kakoc/myox_js_bundler).
+While writing that post I could missed something(logically or from the original source).
+So for those who are curious the working version can be found here: [repo](https://github.com/kakoc/myox_js_bundler).
 
 I hope that it was useful and you enjoyed that post.  
